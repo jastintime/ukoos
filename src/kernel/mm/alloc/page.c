@@ -35,7 +35,8 @@ static struct mm_alloc_page *page_alloc_small(struct mm_alloc_heap *heap,
 }
 
 static void page_init_common(struct mm_alloc_page *page, usize size_class) {
-  assert(size_class_is_valid(size_class) || size_class == 17);
+  assert(size_class_is_valid(size_class) ||
+         size_class == SIZE_CLASS_HUGE_SENTINEL);
 
   // Initialize the page's XOR cookie.
   //
@@ -80,9 +81,9 @@ static void page_init_small_or_large(struct mm_alloc_page *page,
   // Figure out the range of addresses that need to be initialized.
   uptr page_start, page_end;
   page_bounds(page, &page_start, &page_end);
-  page_start = align_up(page_start, 3 + size_class);
-  assert(is_aligned(page_start, 3 + size_class));
-  assert(is_aligned(page_end, 3 + size_class));
+  page_start = align_up(page_start, log2_size_of_size_class(size_class));
+  assert(is_aligned(page_start, log2_size_of_size_class(size_class)));
+  assert(is_aligned(page_end, log2_size_of_size_class(size_class)));
 
   // Randomly initialize the free list. For efficiency's sake, the free list is
   // not perfectly shuffled; instead, we keep a buffer of 16 blocks we might add
@@ -145,7 +146,7 @@ static void page_init_huge(struct mm_alloc_page *page,
   assert(list_is_empty(&page->list));
 
   // Do the common part of initialization.
-  page_init_common(page, 17);
+  page_init_common(page, SIZE_CLASS_HUGE_SENTINEL);
 
   // Push the (only) block onto the free list.
   struct mm_alloc_segment *segment = page_segment((struct mm_alloc_page *)page);
@@ -153,7 +154,7 @@ static void page_init_huge(struct mm_alloc_page *page,
   page_free_push(page, (struct mm_alloc_block *)page_start, align_up(size, 12));
 
   // Push the page to the huge pages list.
-  list_push(&heap->pages[17], &page->list);
+  list_push(&heap->pages[SIZE_CLASS_HUGE_SENTINEL], &page->list);
 }
 
 struct mm_alloc_page *page_new_small(struct mm_alloc_heap *heap,
@@ -229,7 +230,8 @@ void page_free(struct mm_alloc_page *page, struct mm_alloc_heap *heap) {
 
   struct mm_alloc_segment *segment = page_segment(page);
   assert(segment->used_pages);
-  if (--segment->used_pages) {
+  segment->used_pages--;
+  if (segment->used_pages) {
     // There are still more pages in use, so we can't free the segment, and we
     // know this is a page for small objects, so it should end up in the
     // unused_pages list.
@@ -314,7 +316,7 @@ usize page_index(const struct mm_alloc_page *page) {
 }
 
 bool page_in_bounds(const struct mm_alloc_page *page, uaddr addr) {
-  if (page->size_class == 17)
+  if (page->size_class == SIZE_CLASS_HUGE_SENTINEL)
     return addr == align_down((uptr)page, 12) + (2 << 12);
 
   uptr page_start, page_end;

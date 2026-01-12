@@ -81,6 +81,13 @@ static inline bool size_class_is_valid(usize size_class) {
 }
 
 /**
+ * A sentinel for huge pages. Because these are only ever in a state where
+ * they're full (since they only contain one object, and don't get pooled when
+ * empty), this "size class" is _not_ treated as one by `size_class_is_valid`.
+ */
+static constexpr usize SIZE_CLASS_HUGE_SENTINEL = 17;
+
+/**
  * Returns whether a size class is valid for a small object.
  */
 static inline bool size_class_is_small(usize size_class) {
@@ -103,11 +110,19 @@ static inline usize size_class_of_size(usize size) {
 }
 
 /**
+ * Given a size class, returns the log2 of the size of the allocation of that
+ * size class.
+ */
+static inline usize log2_size_of_size_class(usize size_class) {
+  assert(size_class_is_valid(size_class));
+  return 3 + size_class;
+}
+
+/**
  * Given a size class, returns the size of the allocation of that size class.
  */
 static inline usize size_of_size_class(usize size_class) {
-  assert(size_class_is_valid(size_class));
-  return (usize)1 << (3 + size_class);
+  return (usize)1 << log2_size_of_size_class(size_class);
 }
 
 #endif // UKO_OS_KERNEL__MM_ALLOC_SIZE_CLASSES_H

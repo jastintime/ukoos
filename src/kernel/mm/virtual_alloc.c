@@ -24,16 +24,16 @@ enum which_treap {
 };
 
 /**
- * An instance of the virtual memory allocator. The allocator stores a
- * non-empty sequence of VMAs, in a few forms.
+ * An instance of the virtual memory allocator. The allocator stores the same
+ * non-empty sequence of VMAs in three different data structures.
  *
- * - All VMAs are stored in an intrusive doubly linked list, sorted by their
- *   start address. This gives VMAs easy access to their siblings, letting them
- *   be merged when freed.
- * - All VMAs are stored in a treap, sorted by their start address. This allows
- *   efficiently finding a VMA by address.
- * - All free VMAs are stored in a treap, sorted by their size. This allows
- *   efficiently allocating a free VMA.
+ * 1. All VMAs are stored in an intrusive doubly linked list, sorted by their
+ *    start address. This gives VMAs easy access to their siblings, letting them
+ *    be merged when freed.
+ * 2. All VMAs are stored in a treap, sorted by their start address. This allows
+ *    efficiently finding a VMA by address.
+ * 3. All *free* VMAs are stored in a treap, sorted by their size. This allows
+ *    efficiently allocating a free VMA.
  *
  * A few invariants hold:
  *
@@ -93,8 +93,9 @@ struct treap_head {
   enum which_child which_child : 1;
 
   /**
-   * The priority, which the heap is ordered by. This is non-zero when the VMA
-   * is in the treap.
+   * The priority, which the heap is ordered by. This is normally non-zero when
+   * the VMA is in the treap, but gets set to zero during tree rotations while
+   * removing a node from the treap and when the VMA is not in the treap.
    */
   u32 priority : 31;
 
@@ -552,12 +553,16 @@ struct vma *vma_alloc_by_addr(struct vma_allocator *allocator, uaddr lo,
   // Before we do, we allocate memory for the new VMAs to be stored, so we don't
   // have to "undo" work if allocation fails later.
   struct vma *new_vma_lo = nullptr, *new_vma_hi = nullptr;
-  if (vma_lo != lo)
-    if (!(new_vma_lo = alloc(sizeof(struct vma))))
+  if (vma_lo != lo) {
+    new_vma_lo = alloc(sizeof(struct vma));
+    if (!new_vma_lo)
       goto fail;
-  if (vma_hi != hi)
-    if (!(new_vma_hi = alloc(sizeof(struct vma))))
+  }
+  if (vma_hi != hi) {
+    new_vma_hi = alloc(sizeof(struct vma));
+    if (!new_vma_hi)
       goto fail;
+  }
 
   // Save a pointer to the previous VMA (or the allocator), so we can insert all
   // the VMAs into the list without searching.
