@@ -9,6 +9,8 @@
 
 #include <types.h>
 
+u64 walkaddr(uaddr vaddr);
+
 /**
  * A fence on paging-related changes. The other functions declared in this
  * header do not necessarily take effect immediately -- call this function to

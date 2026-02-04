@@ -168,6 +168,20 @@ paddr walk(uaddr vaddr, enum walk_flags flags) {
   return paddr_offset(pgtbl0, ppn0 << 3);
 }
 
+u64 walkaddr(uaddr vaddr) {
+  paddr pte_addr;
+  struct pte pte;
+  u64 offset = vaddr & 0xfff;
+  u64 mask = 0xfff;
+  mask = ~mask;
+  vaddr &= mask;
+
+  pte_addr = walk(vaddr, 0);
+
+  pte = pte_of_bits(physical_read_u64le(pte_addr));
+  return (pte.ppn << 12) + offset;
+}
+
 bool _mm_map(uaddr va, paddr pa, enum page_permissions perms) {
   assert((va & 0xfff) == 0, "va={uaddr}", va);
   assert(!pa.offset, "pa={paddr}", pa);
